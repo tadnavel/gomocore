@@ -1,6 +1,8 @@
 package sctx
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestServiceContext(t *testing.T) {
 	serviceCtx := NewServiceContext(

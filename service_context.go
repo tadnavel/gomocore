@@ -173,6 +173,7 @@ func (s *serviceCtx) LogLevel() string {
 func (s *serviceCtx) EnvName() string { return s.env }
 func (s *serviceCtx) GetName() string { return s.name }
 
+// automatically parse flags into .env file format
 func (s *serviceCtx) parseFlags() {
 	envFile := os.Getenv("ENV_FILE")
 	if envFile == "" {
@@ -185,7 +186,6 @@ func (s *serviceCtx) parseFlags() {
 		}
 	}
 
-	// parse flag to env format
 	flag.VisitAll(func(f *flag.Flag) {
 		envKey := strings.ToUpper(strings.ReplaceAll(f.Name, "-", "_"))
 		if v := os.Getenv(envKey); v != "" {
