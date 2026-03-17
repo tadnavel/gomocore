@@ -33,7 +33,7 @@ type jwtx struct {
 	secret                      string
 	expireAccessTokenInSeconds  int
 	expireRefreshTokenInSeconds int
-	Logger                      loggerc.Logger
+	logger                      loggerc.Logger
 }
 
 // Return JWT component
@@ -69,15 +69,15 @@ func (j *jwtx) ID() string {
 }
 
 func (j *jwtx) Activate(serviceCtx sctx.ServiceContext) error {
-	j.Logger = serviceCtx.Logger(j.id)
+	j.logger = serviceCtx.Logger(j.id)
 
-	j.Logger.Info("activating...")
+	j.logger.Info("activating...")
 	if len(j.secret) < minSecretLength {
 		return ErrSecretKeyNotValid
 	}
 
 	if j.secret == defaultSecret {
-		j.Logger.Warn("using default secret key, please change it!")
+		j.logger.Warn("using default secret key, please change it!")
 	}
 
 	if j.expireAccessTokenInSeconds < minAccessTokenLifeTime {
@@ -92,7 +92,7 @@ func (j *jwtx) Activate(serviceCtx sctx.ServiceContext) error {
 		return ErrRefreshTokenLifeTimeNotValid
 	}
 
-	j.Logger.Info("activated")
+	j.logger.Info("activated")
 
 	return nil
 }
@@ -107,7 +107,7 @@ func (j *jwtx) generateToken(
 	id string,
 	exp int,
 ) (token string, tokenLifeTime int, err error) {
-	j.Logger.With("id", id).With("subject", sub).Debug("generating token")
+	j.logger.With("id", id).With("subject", sub).Debug("generating token")
 	now := time.Now().UTC()
 
 	claims := jwt.RegisteredClaims{
@@ -122,7 +122,7 @@ func (j *jwtx) generateToken(
 	tokenSignedStr, err := t.SignedString([]byte(j.secret))
 
 	if err != nil {
-		j.Logger.Errorf("failed to sign token: id=%s, err=%v", id, err)
+		j.logger.Errorf("failed to sign token: id=%s, err=%v", id, err)
 		return "", 0, err
 	}
 
