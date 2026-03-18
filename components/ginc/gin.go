@@ -22,6 +22,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"net"
 	"net/http"
 	"time"
 
@@ -99,7 +100,7 @@ func (g *ginEngine) Stop() error {
 		defer cancel()
 
 		if err := g.httpServer.Shutdown(ctx); err != nil {
-			g.logger.Errorf("gin server forced to shutdown: %v", err)
+			g.logger.Errorf("gin server forced to shutdown: %w", err)
 			return err
 		}
 		g.logger.Info("gin server is turned off!")
@@ -120,7 +121,7 @@ func (g *ginEngine) GetRouter() *gin.Engine {
 	return g.router
 }
 
-func (g *ginEngine) Run() {
+func (g *ginEngine) Run() error {
 	addr := fmt.Sprintf(":%d", g.port)
 	g.httpServer = &http.Server{
 		Addr:           addr,
@@ -131,10 +132,17 @@ func (g *ginEngine) Run() {
 		MaxHeaderBytes: defaultMaxHeaderBytes,
 	}
 
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return fmt.Errorf("failed to listen on port %d: %w", g.port, err)
+	}
+
 	go func() {
 		g.logger.Infof("gin server is running on port %d...", g.port)
-		if err := g.httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			g.logger.Errorf("listen: %s\n", err)
+		if err := g.httpServer.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			g.logger.Errorf("serve error: %s\n", err)
 		}
 	}()
+
+	return nil
 }
