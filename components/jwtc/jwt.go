@@ -139,7 +139,7 @@ func (j *jwtx) generateToken(
 	tokenSignedStr, err := t.SignedString([]byte(j.secret))
 
 	if err != nil {
-		j.logger.Errorf("failed to sign token: id=%s, err=%v", id, err)
+		j.logger.Errorf("failed to sign token: id=%s, err=%w", id, err)
 		return "", 0, err
 	}
 
