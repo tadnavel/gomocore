@@ -29,6 +29,7 @@ type Logger interface {
 	Errorf(format string, args ...interface{})
 
 	With(key string, value interface{}) Logger
+	WithFields(fields map[string]interface{}) Logger
 }
 
 type ServiceLogger interface {

@@ -57,3 +57,12 @@ func (l *zapLogger) With(key string, value interface{}) loggerc.Logger {
 		sugar: l.sugar.With(key, value),
 	}
 }
+func (l *zapLogger) WithFields(fields map[string]interface{}) loggerc.Logger {
+	var args []interface{}
+	for k, v := range fields {
+		args = append(args, k, v)
+	}
+	return &zapLogger{
+		sugar: l.sugar.With(args...),
+	}
+}
