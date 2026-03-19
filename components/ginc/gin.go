@@ -1,18 +1,17 @@
 // -----------------------------------------------------------------------------
 // Copyright (C) 2026 tadnavel
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 // -----------------------------------------------------------------------------
 
 package ginc
@@ -22,6 +21,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"net"
 	"net/http"
 	"time"
 
@@ -99,7 +99,7 @@ func (g *ginEngine) Stop() error {
 		defer cancel()
 
 		if err := g.httpServer.Shutdown(ctx); err != nil {
-			g.logger.Errorf("gin server forced to shutdown: %v", err)
+			g.logger.Errorf("gin server forced to shutdown: %w", err)
 			return err
 		}
 		g.logger.Info("gin server is turned off!")
@@ -120,7 +120,7 @@ func (g *ginEngine) GetRouter() *gin.Engine {
 	return g.router
 }
 
-func (g *ginEngine) Run() {
+func (g *ginEngine) Run() error {
 	addr := fmt.Sprintf(":%d", g.port)
 	g.httpServer = &http.Server{
 		Addr:           addr,
@@ -131,10 +131,17 @@ func (g *ginEngine) Run() {
 		MaxHeaderBytes: defaultMaxHeaderBytes,
 	}
 
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return fmt.Errorf("failed to listen on port %d: %w", g.port, err)
+	}
+
 	go func() {
 		g.logger.Infof("gin server is running on port %d...", g.port)
-		if err := g.httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			g.logger.Errorf("listen: %s\n", err)
+		if err := g.httpServer.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			g.logger.Errorf("serve error: %s\n", err)
 		}
 	}()
+
+	return nil
 }
