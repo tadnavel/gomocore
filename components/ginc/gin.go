@@ -99,7 +99,7 @@ func (g *ginEngine) Stop() error {
 		defer cancel()
 
 		if err := g.httpServer.Shutdown(ctx); err != nil {
-			g.logger.Errorf("gin server forced to shutdown: %w", err)
+			g.logger.Errorf("gin server forced to shutdown: %v", err)
 			return err
 		}
 		g.logger.Info("gin server is turned off!")
@@ -133,7 +133,7 @@ func (g *ginEngine) Run() error {
 
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
-		return fmt.Errorf("failed to listen on port %d: %w", g.port, err)
+		return fmt.Errorf("failed to listen on port %d: %v", g.port, err)
 	}
 
 	go func() {
