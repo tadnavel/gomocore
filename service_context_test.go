@@ -16,6 +16,8 @@ func TestServiceContext(t *testing.T) {
 	if err := serviceCtx.Load(); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	logger := serviceCtx.Logger("test")
-	logger.Info("load success")
+
+	if err := serviceCtx.Stop(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }

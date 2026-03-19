@@ -97,7 +97,7 @@ func NewServiceContext(opts ...Option) ServiceContext {
 }
 
 func (s *serviceCtx) initFlags() {
-	flag.StringVar(&s.env, "app-env", DevEnv, "Env for service: dev | stg | prd")
+	flag.StringVar(&s.env, "service-env", DevEnv, "Env for service: dev | stg | prd")
 	defaultLogger.InitFlags()
 	for _, c := range s.components {
 		c.InitFlags()
