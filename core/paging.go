@@ -14,28 +14,39 @@
 // limitations under the License.
 // -----------------------------------------------------------------------------
 
-package loggerc
+package core
 
-type Logger interface {
-	Debug(args ...any)
-	Info(args ...any)
-	Warn(args ...any)
-	Error(args ...any)
+type Paging struct {
+	// offset-based
+	Page  int   `json:"page,omitempty"  form:"page"`
+	Limit int   `json:"limit"           form:"limit"`
+	Total int64 `json:"total,omitempty" form:"-"`
 
-	Debugf(format string, args ...any)
-	Infof(format string, args ...any)
-	Warnf(format string, args ...any)
-	Errorf(format string, args ...any)
-
-	With(key string, value any) Logger
-	WithFields(fields map[string]any) Logger
+	// cursor-based
+	Cursor     string `json:"cursor,omitempty"      form:"cursor"`
+	NextCursor string `json:"next_cursor,omitempty" form:"-"`
 }
 
-type ServiceLogger interface {
-	InitFlags()
-	Activate() error
-	Stop() error
-	GetLogger(prefix string) Logger
-	SetLevel(level string) error
-	GetLevel() string
+func (p *Paging) Process() {
+	if p.Limit <= 0 {
+		p.Limit = 10
+	}
+	if p.Limit > 200 {
+		p.Limit = 200
+	}
+
+	if p.Cursor == "" && p.Page < 1 {
+		p.Page = 1
+	}
+}
+
+func (p *Paging) IsOffsetBased() bool {
+	return p.Cursor == ""
+}
+
+func (p *Paging) Offset() int {
+	if p.Page < 1 {
+		return 0
+	}
+	return (p.Page - 1) * p.Limit
 }

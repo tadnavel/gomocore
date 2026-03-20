@@ -49,8 +49,8 @@ type ServiceContext interface {
 
 	EnvName() string
 	GetName() string
-	Get(id string) (interface{}, bool)
-	MustGet(id string) interface{}
+	Get(id string) (any, bool)
+	MustGet(id string) any
 }
 
 type serviceCtx struct {
@@ -152,12 +152,12 @@ func (s *serviceCtx) Logger(prefix string) loggerc.Logger {
 	return defaultLogger.GetLogger(prefix)
 }
 
-func (s *serviceCtx) Get(id string) (interface{}, bool) {
+func (s *serviceCtx) Get(id string) (any, bool) {
 	c, ok := s.store[id]
 	return c, ok
 }
 
-func (s *serviceCtx) MustGet(id string) interface{} {
+func (s *serviceCtx) MustGet(id string) any {
 	c, ok := s.Get(id)
 	if !ok {
 		panic(fmt.Sprintf("cannot get component %s", id))

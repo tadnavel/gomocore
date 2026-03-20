@@ -18,9 +18,13 @@ package jwtc
 
 import (
 	"context"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
 	"errors"
 	"flag"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -28,17 +32,22 @@ import (
 	"github.com/tadnavel/gomocore/components/loggerc"
 )
 
+// private key
+// openssl genrsa -out private.pem 2048
+
+// public key
+// openssl rsa -in private.pem -pubout -out public.pem
+
 const (
-	defaultSecret                    = "very-important-please-change-it!" // 32 bytes
-	defaultAccessTokenExpireSeconds  = 10 * 60                            // 10 minutes
-	defaultRefreshTokenExpireSeconds = 1 * 60 * 60                        // 1 hours
-	minSecretLength                  = 32
+	defaultAccessTokenExpireSeconds  = 10 * 60     // 10 minutes
+	defaultRefreshTokenExpireSeconds = 1 * 60 * 60 // 1 hours
 	minAccessTokenLifeTime           = 60
 	minRefreshTokenLifeTime          = 60 * 60
 )
 
 var (
-	ErrSecretKeyNotValid            = errors.New("secret key must be in 32 bytes")
+	ErrPrivateKeyNotValid           = errors.New("private key not valid")
+	ErrPublicKeyNotValid            = errors.New("public key not valid")
 	ErrAccessTokenLifeTimeTooShort  = fmt.Errorf("access token life time too short(min=%d)", minAccessTokenLifeTime)
 	ErrRefreshTokenLifeTimeTooShort = fmt.Errorf("refresh token life time too short(min=%d)", minRefreshTokenLifeTime)
 	ErrRefreshTokenLifeTimeNotValid = errors.New("refresh token life time not valid")
@@ -46,10 +55,18 @@ var (
 
 type jwtx struct {
 	id                          string
-	secret                      string
+	privateKeyPath              string
+	publicKeyPath               string
 	expireAccessTokenInSeconds  int
 	expireRefreshTokenInSeconds int
+	privateKey                  *rsa.PrivateKey
+	publicKey                   *rsa.PublicKey
 	logger                      loggerc.Logger
+}
+
+type CustomClaims struct {
+	jwt.RegisteredClaims
+	Role string `json:"role"`
 }
 
 // Return JWT component
@@ -61,10 +78,16 @@ func NewJWTComponent(id string) *jwtx {
 
 func (j *jwtx) InitFlags() {
 	flag.StringVar(
-		&j.secret,
-		"jwt-secret",
-		defaultSecret,
-		"secret key to sign JWT",
+		&j.privateKeyPath,
+		"jwt-private-key",
+		"",
+		"path to RSA private key PEM file (only required on auth service)",
+	)
+	flag.StringVar(
+		&j.publicKeyPath,
+		"jwt-public-key",
+		"",
+		"path to RSA public key PEM file",
 	)
 	flag.IntVar(
 		&j.expireAccessTokenInSeconds,
@@ -86,30 +109,58 @@ func (j *jwtx) ID() string {
 
 func (j *jwtx) Activate(serviceCtx sctx.ServiceContext) error {
 	j.logger = serviceCtx.Logger(j.id)
-
 	j.logger.Info("activating...")
-	if len(j.secret) < minSecretLength {
-		return ErrSecretKeyNotValid
-	}
 
-	if j.secret == defaultSecret {
-		j.logger.Warn("using default secret key, please change it!")
+	// public key
+	if j.publicKeyPath == "" {
+		return ErrPublicKeyNotValid
+	}
+	pubBytes, err := os.ReadFile(j.publicKeyPath)
+	if err != nil {
+		return fmt.Errorf("read public key: %w", err)
+	}
+	pubBlock, _ := pem.Decode(pubBytes)
+	if pubBlock == nil {
+		return ErrPublicKeyNotValid
+	}
+	pubInterface, err := x509.ParsePKIXPublicKey(pubBlock.Bytes)
+	if err != nil {
+		return fmt.Errorf("parse public key: %w", err)
+	}
+	pub, ok := pubInterface.(*rsa.PublicKey)
+	if !ok {
+		return ErrPublicKeyNotValid
+	}
+	j.publicKey = pub
+
+	// private key only need in auth service
+	if j.privateKeyPath != "" {
+		privBytes, err := os.ReadFile(j.privateKeyPath)
+		if err != nil {
+			return fmt.Errorf("read private key: %w", err)
+		}
+		privBlock, _ := pem.Decode(privBytes)
+		if privBlock == nil {
+			return ErrPrivateKeyNotValid
+		}
+		priv, err := x509.ParsePKCS1PrivateKey(privBlock.Bytes)
+		if err != nil {
+			return fmt.Errorf("parse private key: %w", err)
+		}
+		j.privateKey = priv
 	}
 
 	if j.expireAccessTokenInSeconds < minAccessTokenLifeTime {
 		return ErrAccessTokenLifeTimeTooShort
 	}
-
 	if j.expireRefreshTokenInSeconds < minRefreshTokenLifeTime {
 		return ErrRefreshTokenLifeTimeTooShort
 	}
-
 	if j.expireRefreshTokenInSeconds < j.expireAccessTokenInSeconds {
 		return ErrRefreshTokenLifeTimeNotValid
 	}
 
 	j.logger.Info("activated")
-
 	return nil
 }
 
@@ -119,38 +170,44 @@ func (j *jwtx) Stop() error {
 
 func (j *jwtx) generateToken(
 	ctx context.Context,
-	sub string,
-	id string,
+	sub, id, role string,
 	exp int,
-) (token string, tokenLifeTime int, err error) {
+) (string, int, error) {
+	if j.privateKey == nil {
+		return "", 0, errors.New("private key not loaded, this service cannot issue tokens")
+	}
+
 	j.logger.With("id", id).With("subject", sub).Debug("generating token")
 	now := time.Now().UTC()
 
-	claims := jwt.RegisteredClaims{
-		Subject:   sub,
-		ExpiresAt: jwt.NewNumericDate(now.Add(time.Second * time.Duration(exp))),
-		NotBefore: jwt.NewNumericDate(now),
-		IssuedAt:  jwt.NewNumericDate(now),
-		ID:        id,
+	claims := CustomClaims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			Subject:   sub,
+			ExpiresAt: jwt.NewNumericDate(now.Add(time.Second * time.Duration(exp))),
+			NotBefore: jwt.NewNumericDate(now),
+			IssuedAt:  jwt.NewNumericDate(now),
+			ID:        id,
+		},
+		Role: role,
 	}
-	t := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
-	tokenSignedStr, err := t.SignedString([]byte(j.secret))
-
+	t := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+	tokenStr, err := t.SignedString(j.privateKey)
 	if err != nil {
-		j.logger.Errorf("failed to sign token: id=%s, err=%w", id, err)
+		j.logger.Errorf("failed to sign token: id=%s, err=%v", id, err)
 		return "", 0, err
 	}
 
-	return tokenSignedStr, exp, nil
+	return tokenStr, exp, nil
 }
 
 func (j *jwtx) IssueAccessToken(
 	ctx context.Context,
 	id string,
 	sub string,
+	role string,
 ) (token string, tokenLifeTime int, err error) {
-	tokenStr, exp, err := j.generateToken(ctx, sub, id, j.expireAccessTokenInSeconds)
+	tokenStr, exp, err := j.generateToken(ctx, sub, id, role, j.expireAccessTokenInSeconds)
 
 	if err != nil {
 		return "", 0, err
@@ -163,8 +220,9 @@ func (j *jwtx) IssueRefreshToken(
 	ctx context.Context,
 	id string,
 	sub string,
+	role string,
 ) (token string, tokenLifeTime int, err error) {
-	tokenStr, exp, err := j.generateToken(ctx, sub, id, j.expireRefreshTokenInSeconds)
+	tokenStr, exp, err := j.generateToken(ctx, sub, id, role, j.expireRefreshTokenInSeconds)
 
 	if err != nil {
 		return "", 0, err
@@ -176,14 +234,15 @@ func (j *jwtx) IssueRefreshToken(
 func (j *jwtx) ParseToken(
 	ctx context.Context,
 	tokenString string,
-) (*jwt.RegisteredClaims, error) {
-	var rc jwt.RegisteredClaims
+) (*CustomClaims, error) {
+	var cc CustomClaims
 
-	token, err := jwt.ParseWithClaims(tokenString, &rc, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+	token, err := jwt.ParseWithClaims(tokenString, &cc, func(token *jwt.Token) (any, error) {
+		// only accept RS256
+		if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
-		return []byte(j.secret), nil
+		return j.publicKey, nil
 	})
 
 	if err != nil {
@@ -194,5 +253,5 @@ func (j *jwtx) ParseToken(
 		return nil, errors.New("invalid token")
 	}
 
-	return &rc, nil
+	return &cc, nil
 }

@@ -25,39 +25,39 @@ type zapLogger struct {
 	sugar *zap.SugaredLogger
 }
 
-func (l *zapLogger) Debug(args ...interface{}) {
+func (l *zapLogger) Debug(args ...any) {
 	l.sugar.Debug(args...)
 }
-func (l *zapLogger) Info(args ...interface{}) {
+func (l *zapLogger) Info(args ...any) {
 	l.sugar.Info(args...)
 }
-func (l *zapLogger) Warn(args ...interface{}) {
+func (l *zapLogger) Warn(args ...any) {
 	l.sugar.Warn(args...)
 }
-func (l *zapLogger) Error(args ...interface{}) {
+func (l *zapLogger) Error(args ...any) {
 	l.sugar.Error(args...)
 }
 
-func (l *zapLogger) Debugf(format string, args ...interface{}) {
+func (l *zapLogger) Debugf(format string, args ...any) {
 	l.sugar.Debugf(format, args...)
 }
-func (l *zapLogger) Infof(format string, args ...interface{}) {
+func (l *zapLogger) Infof(format string, args ...any) {
 	l.sugar.Infof(format, args...)
 }
-func (l *zapLogger) Warnf(format string, args ...interface{}) {
+func (l *zapLogger) Warnf(format string, args ...any) {
 	l.sugar.Warnf(format, args...)
 }
-func (l *zapLogger) Errorf(format string, args ...interface{}) {
+func (l *zapLogger) Errorf(format string, args ...any) {
 	l.sugar.Errorf(format, args...)
 }
 
-func (l *zapLogger) With(key string, value interface{}) loggerc.Logger {
+func (l *zapLogger) With(key string, value any) loggerc.Logger {
 	return &zapLogger{
 		sugar: l.sugar.With(key, value),
 	}
 }
-func (l *zapLogger) WithFields(fields map[string]interface{}) loggerc.Logger {
-	var args []interface{}
+func (l *zapLogger) WithFields(fields map[string]any) loggerc.Logger {
+	var args []any
 	for k, v := range fields {
 		args = append(args, k, v)
 	}

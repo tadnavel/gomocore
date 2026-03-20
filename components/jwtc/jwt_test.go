@@ -18,6 +18,10 @@ package jwtc
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
 	"log"
 	"os"
 	"testing"
@@ -27,9 +31,22 @@ import (
 
 var testServiceCtx sctx.ServiceContext
 
-const ID = "jwt"
+const (
+	ID              = "jwt"
+	testPrivKeyPath = "testdata/private.pem"
+	testPubKeyPath  = "testdata/public.pem"
+)
 
 func TestMain(m *testing.M) {
+	if err := generateTestKeys(); err != nil {
+		log.Fatalf("generate test keys: %v", err)
+	}
+
+	os.Args = append(os.Args,
+		"-jwt-private-key="+testPrivKeyPath,
+		"-jwt-public-key="+testPubKeyPath,
+	)
+
 	testServiceCtx = sctx.NewServiceContext(
 		sctx.WithName("test"),
 		sctx.WithComponent(NewJWTComponent(ID)),
@@ -45,16 +62,19 @@ func TestMain(m *testing.M) {
 		log.Fatalln(err.Error())
 	}
 
+	_ = os.RemoveAll("testdata")
+
 	os.Exit(code)
 }
 
 func TestIssueToken(t *testing.T) {
 	jwtComp := testServiceCtx.MustGet(ID).(*jwtx)
-	if _, _, err := jwtComp.IssueAccessToken(context.Background(), "tokenID", "userID"); err != nil {
+
+	if _, _, err := jwtComp.IssueAccessToken(context.Background(), "tokenID", "userID", "user"); err != nil {
 		t.Fatalf("unexpected error(issue access token): %v", err)
 	}
 
-	if _, _, err := jwtComp.IssueRefreshToken(context.Background(), "tokenID", "userID"); err != nil {
+	if _, _, err := jwtComp.IssueRefreshToken(context.Background(), "tokenID", "userID", "user"); err != nil {
 		t.Fatalf("unexpected error(issue refresh token): %v", err)
 	}
 }
@@ -62,7 +82,7 @@ func TestIssueToken(t *testing.T) {
 func TestParseToken(t *testing.T) {
 	jwtComp := testServiceCtx.MustGet(ID).(*jwtx)
 
-	tokenString, _, err := jwtComp.IssueAccessToken(context.Background(), "tokenID", "userID")
+	tokenString, _, err := jwtComp.IssueAccessToken(context.Background(), "tokenID", "userID", "user")
 	if err != nil {
 		t.Fatalf("unexpected error(issue access token): %v", err)
 	}
@@ -73,10 +93,76 @@ func TestParseToken(t *testing.T) {
 	}
 
 	if claims.Subject != "userID" {
-		t.Fatalf("expected sub=userID, get sub=%s", claims.Subject)
+		t.Fatalf("expected sub=userID, got sub=%s", claims.Subject)
 	}
 
 	if claims.ID != "tokenID" {
-		t.Fatalf("expected sub=tokenID, get sub=%s", claims.Subject)
+		t.Fatalf("expected jti=tokenID, got jti=%s", claims.ID)
 	}
+
+	if claims.Role != "user" {
+		t.Fatalf("expected role=user, got role=%s", claims.Role)
+	}
+}
+
+func TestParseToken_InvalidToken(t *testing.T) {
+	jwtComp := testServiceCtx.MustGet(ID).(*jwtx)
+
+	_, err := jwtComp.ParseToken(context.Background(), "invalid.token.string")
+	if err == nil {
+		t.Fatal("expected error for invalid token, got nil")
+	}
+}
+
+func TestIssueToken_WithoutPrivateKey(t *testing.T) {
+	// simulate service chỉ có public key (non-auth service)
+	j := &jwtx{
+		publicKey:                   testServiceCtx.MustGet(ID).(*jwtx).publicKey,
+		expireAccessTokenInSeconds:  defaultAccessTokenExpireSeconds,
+		expireRefreshTokenInSeconds: defaultRefreshTokenExpireSeconds,
+	}
+
+	_, _, err := j.IssueAccessToken(context.Background(), "tokenID", "userID", "user")
+	if err == nil {
+		t.Fatal("expected error when private key not loaded, got nil")
+	}
+}
+
+func generateTestKeys() error {
+	if err := os.MkdirAll("testdata", 0700); err != nil {
+		return err
+	}
+
+	priv, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return err
+	}
+
+	// private key
+	privFile, err := os.Create(testPrivKeyPath)
+	if err != nil {
+		return err
+	}
+	defer privFile.Close()
+	if err := pem.Encode(privFile, &pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: x509.MarshalPKCS1PrivateKey(priv),
+	}); err != nil {
+		return err
+	}
+
+	// public key
+	pubBytes, err := x509.MarshalPKIXPublicKey(&priv.PublicKey)
+	if err != nil {
+		return err
+	}
+	pubFile, err := os.Create(testPubKeyPath)
+	if err != nil {
+		return err
+	}
+	defer pubFile.Close()
+	return pem.Encode(pubFile, &pem.Block{
+		Type:  "PUBLIC KEY",
+		Bytes: pubBytes,
+	})
 }

@@ -32,7 +32,7 @@ type ServiceError struct {
 	Code       ErrCode                `json:"code"`
 	HTTPStatus int                    `json:"-"`
 	Message    string                 `json:"message"`
-	Fields     map[string]interface{} `json:"fields,omitempty"`
+	Fields     map[string]any `json:"fields,omitempty"`
 
 	rootError error
 	logMsg    string
@@ -40,10 +40,10 @@ type ServiceError struct {
 
 type Option func(*ServiceError)
 
-func WithField(key string, value interface{}) Option {
+func WithField(key string, value any) Option {
 	return func(e *ServiceError) {
 		if e.Fields == nil {
-			e.Fields = make(map[string]interface{})
+			e.Fields = make(map[string]any)
 		}
 		e.Fields[key] = value
 	}
