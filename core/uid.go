@@ -112,7 +112,7 @@ func (uid *UID) Value() (driver.Value, error) {
 	return int64(uid.localID), nil
 }
 
-func (uid *UID) Scan(value interface{}) error {
+func (uid *UID) Scan(value any) error {
 	if value == nil {
 		return nil
 	}

@@ -17,18 +17,18 @@
 package loggerc
 
 type Logger interface {
-	Debug(args ...interface{})
-	Info(args ...interface{})
-	Warn(args ...interface{})
-	Error(args ...interface{})
+	Debug(args ...any)
+	Info(args ...any)
+	Warn(args ...any)
+	Error(args ...any)
 
-	Debugf(format string, args ...interface{})
-	Infof(format string, args ...interface{})
-	Warnf(format string, args ...interface{})
-	Errorf(format string, args ...interface{})
+	Debugf(format string, args ...any)
+	Infof(format string, args ...any)
+	Warnf(format string, args ...any)
+	Errorf(format string, args ...any)
 
-	With(key string, value interface{}) Logger
-	WithFields(fields map[string]interface{}) Logger
+	With(key string, value any) Logger
+	WithFields(fields map[string]any) Logger
 }
 
 type ServiceLogger interface {
