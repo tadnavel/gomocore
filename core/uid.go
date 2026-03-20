@@ -48,7 +48,7 @@ func NewUID(localID uint32, objType int, shardID uint32) UID {
 
 func (uid *UID) String() string {
 	val := uint64(uid.localID)<<28 | uint64(uid.objectType)<<18 | uint64(uid.shardID)<<0
-	return base58.Encode([]byte(fmt.Sprintf("%v", val)))
+	return base58.Encode(fmt.Appendf(nil, "%v", val))
 }
 
 func (uid *UID) GetLocalID() uint32 {
@@ -88,11 +88,11 @@ func FromBase58(s string) (UID, error) {
 }
 
 func (uid *UID) MarshalJSON() ([]byte, error) {
-	return []byte(fmt.Sprintf("\"%s\"", uid.String())), nil
+	return fmt.Appendf(nil, "\"%s\"", uid.String()), nil
 }
 
 func (uid *UID) UnmarshalJSON(data []byte) error {
-	decodeUID, err := FromBase58(strings.Replace(string(data), "\"", "", -1))
+	decodeUID, err := FromBase58(strings.ReplaceAll(string(data), "\"", ""))
 
 	if err != nil {
 		return err
